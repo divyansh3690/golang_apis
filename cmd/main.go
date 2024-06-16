@@ -8,22 +8,33 @@ import (
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
+	ph := handlers.GetProductsHandlerfunc()
+	home := handlers.ResponseFunc()
+	// gorilla mux router
+	sm := mux.NewRouter()
 
-	hh := handlers.ResponseFunc()
-	gb := handlers.ResponseFuncGoodbye()
-	prod := handlers.GetProductsHandlerfunc()
+	// we can create sub router with specific verbs like GET / POST with specific functions.
+	getRoute := sm.Methods(http.MethodGet).Subrouter()
+	getRoute.HandleFunc("/products", ph.GetReqProd)
 
-	// custom server we created..
+	putRoute := sm.Methods(http.MethodPut).Subrouter()
+	putRoute.HandleFunc("/products/{id:[0-9]+}", ph.UpdateProduct)
+	putRoute.Use(ph.MiddlewaresHandlers)
 
-	sm := http.NewServeMux()
+	postRoute := sm.Methods(http.MethodPost).Subrouter()
+	postRoute.HandleFunc("/products", ph.AddProduct)
+	postRoute.Use(ph.MiddlewaresHandlers)
 
-	sm.Handle("/goodbye", gb)
+	getHomeRoute := sm.Methods(http.MethodGet).Subrouter()
+	getHomeRoute.HandleFunc("/", home.ServeHTTP)
 
-	sm.Handle("/products/", prod)
-	sm.Handle("/", hh)
+	delProdRoute := sm.Methods(http.MethodDelete).Subrouter()
+	delProdRoute.HandleFunc("/products/{id:[0-9]+}", ph.RemoveProduct)
 
 	srv := &http.Server{
 		Addr:        ":8080",

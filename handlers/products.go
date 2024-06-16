@@ -1,13 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"go/test/data"
 	"net/http"
-	"reflect"
-	"regexp"
 	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
 type Product struct {
@@ -17,63 +18,11 @@ func GetProductsHandlerfunc() *Product {
 	return &Product{}
 }
 
-func (prod *Product) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-
-	if r.Method == http.MethodGet {
-		prod.GetReqProd(rw, r)
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		prod.AddProduct(rw, r)
-		return
-	}
-
-	// two things to keep in mind in put you get id form url and body that you wanna change
-
-	if r.Method == http.MethodPut {
-		print("Inside put")
-
-		regexInpt := "([0-9]+)"
-		reg := regexp.MustCompile(regexInpt)
-		all_string_match := reg.FindAllStringSubmatch(r.URL.Path, -1)
-
-		fmt.Println(all_string_match)
-
-		if len(all_string_match) != 1 {
-			fmt.Println("Error unmarshing the url path as more than one id")
-
-			http.Error(rw, "Invalid url path", http.StatusBadRequest)
-		}
-
-		if len(all_string_match[0]) != 2 {
-			fmt.Println(all_string_match[0])
-			fmt.Println(all_string_match[1])
-			fmt.Println("Error unmarshing the url path as more than one id")
-
-			http.Error(rw, "Invalid url path", http.StatusBadRequest)
-		}
-
-		idProd := all_string_match[0][1]
-		id, err := strconv.Atoi(idProd)
-		fmt.Print(id)
-		if err != nil {
-			fmt.Println("Error as couldnt convert int id to string in PUT")
-		}
-		prod.UpdateProduct(id, rw, r)
-		return
-
-	}
-
-	// handling other requests
-	rw.WriteHeader(http.StatusMethodNotAllowed)
-
-}
-
+// NOTE WE need to keep this signature of (rw, request ) as any method handling request should have the signature of SERVE HTTP
 // HANDLES GET REQ AND CONVERTS DATA TO JSON
 func (prod *Product) GetReqProd(rw http.ResponseWriter, r *http.Request) {
 	dt := data.GetProducts()
-	fmt.Println(reflect.TypeOf(dt))
+	// fmt.Println(reflect.TypeOf(dt))
 	value, err := json.Marshal(dt)
 	if err != nil {
 		fmt.Print("Error occurede while converting data to json", err)
@@ -86,25 +35,65 @@ func (prod *Product) GetReqProd(rw http.ResponseWriter, r *http.Request) {
 func (prod *Product) AddProduct(rw http.ResponseWriter, r *http.Request) {
 
 	// we need to create obj of our interface as
-	prod_obj := &data.Product{}
 
-	err := prod_obj.FromJSON(r.Body)
-	if err != nil {
-		http.Error(rw, fmt.Sprintf("Unable to unmarshal the given json : %v", err), http.StatusBadRequest)
+	prod_obj := r.Context().Value(KeyProduct{}).(data.Product)
 
-	}
-	data.AddProduct(prod_obj)
+	data.AddProduct(&prod_obj)
 	fmt.Printf("DATA: %#v", prod_obj)
 }
 
-func (prod *Product) UpdateProduct(id int, rw http.ResponseWriter, r *http.Request) {
-	prod_obj := &data.Product{}
-	err := prod_obj.FromJSON(r.Body)
+func (prod *Product) UpdateProduct(rw http.ResponseWriter, r *http.Request) {
+
+	id_str := mux.Vars(r)
+	// mux vars gives us variables passed
+	id, err := strconv.Atoi(id_str["id"])
 	if err != nil {
-		fmt.Println("Error occured, unable to unmarshal json")
+		http.Error(rw, "Unable to filer out id from url ", http.StatusBadGateway)
 	}
-	err2 := data.UpdateProd(id, prod_obj)
+	prod_obj := r.Context().Value(KeyProduct{}).(data.Product)
+
+	err2 := data.UpdateProd(id, &prod_obj)
 	if err2 != nil {
 		fmt.Print(err2)
 	}
+}
+
+func (prod *Product) RemoveProduct(rw http.ResponseWriter, r *http.Request) {
+	id_str := mux.Vars(r)
+	id, err := strconv.Atoi(id_str["id"])
+	if err != nil {
+		fmt.Println("Error occured while filtering id from request url", err)
+	}
+	err = data.RemoveProd(id)
+
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		fmt.Println(err)
+	}
+}
+
+type KeyProduct struct{}
+
+func (prod *Product) MiddlewaresHandlers(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+
+		prod_obj := &data.Product{}
+
+		err := prod_obj.FromJSON(r.Body)
+		if err != nil {
+			http.Error(rw, fmt.Sprintf("Unable to unmarshal the given json : %v", err), http.StatusBadRequest)
+			return
+		}
+		fmt.Println("VSALE:,", prod_obj)
+		err = prod_obj.Validator()
+		if err != nil {
+			http.Error(rw, fmt.Sprintf("Unable to unmarshal the given json in validation: %v", err), http.StatusBadRequest)
+			return
+		}
+		fmt.Println(prod_obj)
+		ctx := context.WithValue(r.Context(), KeyProduct{}, *prod_obj)
+		r = r.WithContext(ctx)
+		next.ServeHTTP(rw, r)
+
+	})
 }
