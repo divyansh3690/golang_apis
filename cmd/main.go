@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"go/test/data"
 	"go/test/handlers"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -17,10 +19,18 @@ func main() {
 	home := handlers.ResponseFunc()
 	// gorilla mux router
 	sm := mux.NewRouter()
-
+	err := godotenv.Load(".env")
+	if err != nil {
+		fmt.Println("Error loading env file")
+	}
+	fmt.Print("env file is ", os.Getenv("GREETING"))
+	connections := data.GetMongoDBFunctions()
+	connections.Mongo_Connect()
 	// we can create sub router with specific verbs like GET / POST with specific functions.
 	getRoute := sm.Methods(http.MethodGet).Subrouter()
 	getRoute.HandleFunc("/products", ph.GetReqProd)
+
+	getRoute.HandleFunc(("/products/{id:[0-9]+}"), ph.GetProdByID)
 
 	putRoute := sm.Methods(http.MethodPut).Subrouter()
 	putRoute.HandleFunc("/products/{id:[0-9]+}", ph.UpdateProduct)
