@@ -17,6 +17,8 @@ import (
 func main() {
 	ph := handlers.GetProductsHandlerfunc()
 	home := handlers.ResponseFunc()
+	user_route := handlers.GetUsersHandlerFunc()
+
 	// gorilla mux router
 	sm := mux.NewRouter()
 	err := godotenv.Load(".env")
@@ -26,6 +28,7 @@ func main() {
 	fmt.Print("env file is ", os.Getenv("GREETING"))
 	connections := data.GetMongoDBFunctions()
 	connections.Mongo_Connect()
+
 	// we can create sub router with specific verbs like GET / POST with specific functions.
 	getRoute := sm.Methods(http.MethodGet).Subrouter()
 	getRoute.HandleFunc("/products", ph.GetReqProd)
@@ -46,6 +49,13 @@ func main() {
 	delProdRoute := sm.Methods(http.MethodDelete).Subrouter()
 	delProdRoute.HandleFunc("/products/{id:[0-9]+}", ph.RemoveProduct)
 
+	postUserRoute := sm.Methods(http.MethodPost).Subrouter()
+	postUserRoute.HandleFunc("/signup", user_route.AddUser)
+	postUserRoute.Use(user_route.MiddlewaresUserHandlers)
+
+	postLoginRoute := sm.Methods(http.MethodPost).Subrouter()
+	postLoginRoute.HandleFunc("/login", user_route.Login)
+
 	srv := &http.Server{
 		Addr:        ":8080",
 		Handler:     sm,
@@ -54,6 +64,8 @@ func main() {
 	}
 
 	go func() {
+		fmt.Printf("http://localhost%s", srv.Addr)
+		fmt.Println()
 		srv.ListenAndServe()
 	}()
 
