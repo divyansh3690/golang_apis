@@ -22,7 +22,7 @@ func GetMongoDBFunctions() *mongoDB {
 	return &mongoDB{}
 }
 
-func (md *mongoDB) Mongo_Connect() {
+func (md *mongoDB) Mongo_Connect() *mongo.Client {
 	// MongoDB connection URI
 	uri := "mongodb+srv://divyanshnumb:j72yV3mdkHO2MFlk@productsprj.cayjksg.mongodb.net/?retryWrites=true&w=majority&appName=Productsprj"
 
@@ -37,7 +37,6 @@ func (md *mongoDB) Mongo_Connect() {
 
 	// Set the client in the struct
 	md.client = client
-	md.mgDBproducts = "PRODUCTS"
 	// Check the connection
 	err = client.Ping(context.TODO(), nil)
 	if err != nil {
@@ -46,7 +45,13 @@ func (md *mongoDB) Mongo_Connect() {
 	fmt.Print("Client initialized", client)
 
 	fmt.Println("Connected to MongoDB!")
+	return client
+}
 
+func Open_Collection(client *mongo.Client, collectionName string) *mongo.Collection {
+	collection := client.Database("PRODUCTS").Collection(collectionName)
+
+	return collection
 }
 
 func (md *mongoDB) Insert_one_mdb(collection string, doc interface{}) error {
@@ -61,7 +66,6 @@ func (md *mongoDB) Insert_one_mdb(collection string, doc interface{}) error {
 		}()
 	}
 
-	fmt.Println("Inside insert one :", doc)
 	md.mgDBproducts = "PRODUCTS"
 	coll := md.client.Database(md.mgDBproducts).Collection(collection)
 	ctx := context.TODO()
@@ -87,7 +91,7 @@ func (md *mongoDB) Update_one_mdb(collection string, doc interface{}, id int) er
 
 	fmt.Println("Inside update one mongo :", doc)
 	md.mgDBproducts = "PRODUCTS"
-	_, _, err := md.GetProdByID_mdb("products_data", id)
+	_, _, err := md.GetProdByID_mdb(collection, id)
 	if err != nil {
 		return err
 	}
@@ -128,6 +132,8 @@ func (md *mongoDB) Delete_one_mdb(collection string, id int) error {
 	}
 	return nil
 }
+
+// NOTE: GET FUNCTIONS WILL BE DIFFERENT FOR MONGO DB.
 
 func (md *mongoDB) GetAll_mdb(collection string) ([]*Product, error) {
 	if md.client == nil {
@@ -221,5 +227,41 @@ func (md *mongoDB) GetProdByID_mdb(collection string, id int) (string, *Product,
 		return stringObjectID, &tempProd, nil
 	}
 	return "", nil, fmt.Errorf("no product found with given ID")
+
+}
+
+func Get_UserByEmailorID(email string, user_id int) (*User, error) {
+
+	if email == "" && user_id <= 0 {
+		return nil, fmt.Errorf("both email and userID cant be null")
+	}
+	var decodedUser User
+	if !(user_id <= 0) {
+
+		// search by userID
+		ctx := context.TODO()
+		// var userDef User
+		err := collection.FindOne(ctx, bson.M{"userid": user_id}).Decode(&decodedUser)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, fmt.Errorf("no product found with given ID")
+			}
+			return nil, fmt.Errorf("failed to find product: %v", err)
+		}
+		return &decodedUser, nil
+	} else {
+
+		// search by email
+
+		ctx := context.TODO()
+		err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&decodedUser)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, fmt.Errorf("no product found with given email")
+			}
+			return nil, fmt.Errorf("failed to find product: %v", err)
+		}
+		return &decodedUser, nil
+	}
 
 }

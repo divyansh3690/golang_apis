@@ -105,6 +105,7 @@ func (prod *Product) MiddlewaresHandlers(next http.Handler) http.Handler {
 		prod_obj := &data.Product{}
 
 		err := prod_obj.FromJSON(r.Body)
+		// fmt.Print([]byte(r.Body.id))
 		if err != nil {
 			http.Error(rw, fmt.Sprintf("Unable to unmarshal the given json : %v", err), http.StatusBadRequest)
 			return
@@ -112,7 +113,7 @@ func (prod *Product) MiddlewaresHandlers(next http.Handler) http.Handler {
 		fmt.Println("VSALE:,", prod_obj)
 		err = prod_obj.Validator()
 		if err != nil {
-			http.Error(rw, fmt.Sprintf("Unable to unmarshal the given json in validation: %v", err), http.StatusBadRequest)
+			http.Error(rw, fmt.Sprintf("Validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
 		fmt.Println(prod_obj)
